@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">ClearShield</string>
+    <string name="vpn_notification_channel">ClearShield Protection</string>
+    <string name="vpn_notification_channel_desc">Shows status of active local DNS protection</string>
+    <string name="vpn_active_title">ClearShield Active</string>
+    <string name="vpn_active_desc">Shielding your device from ads and trackers</string>
+</resources>

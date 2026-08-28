@@ -1,0 +1,11 @@
+<resources>
+    <style name="Theme.ClearShield" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#0B132B</item>
+        <item name="android:colorBackground">#0B132B</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:statusBarColor">#0B132B</item>
+        <item name="android:navigationBarColor">#0B132B</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>
