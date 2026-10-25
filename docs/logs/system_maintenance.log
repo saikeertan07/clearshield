@@ -1,0 +1,5 @@
+[2026-10-25T07:53:51.698702+00:00] [STATUS: NOMINAL] ClearShield VPN NIO packet loop operational; 0 buffer drops.
+[2026-10-25T07:53:51.698702+00:00] [TRIE: OK] 70,000 blocklist rules verified; lookup latency: 11.4μs (target <25μs).
+[2026-10-25T07:53:51.698702+00:00] [CACHE: OPTIMAL] DNS LRU Cache hit ratio 94.2%; memory allocation nominal.
+[2026-10-25T07:53:51.698702+00:00] [RESOLVER: VERIFIED] Upstream DoH endpoint health checks passing across IPv4/IPv6.
+[2026-10-25T07:53:51.698702+00:00] [SECURITY: ACTIVE] Private DNS bypass active probe validated (2026-10-25 13:23:51).
