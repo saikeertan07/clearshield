@@ -307,4 +307,39 @@ class DnsPacketTest {
         assertEquals("example.com", parsed.questions[1].qName)
         assertEquals(28, parsed.questions[1].qType)
     }
+
+    @Test
+    fun testBlockedResponseWithExtendedDnsError() {
+        val buf = ByteBuffer.allocate(64).order(ByteOrder.BIG_ENDIAN)
+        buf.putShort(0x1234.toShort())
+        buf.putShort(0x0100.toShort()) // RD = 1
+        buf.putShort(1.toShort()) // QDCOUNT = 1
+        buf.putShort(0.toShort())
+        buf.putShort(0.toShort())
+        buf.putShort(0.toShort())
+
+        buf.put(3.toByte())
+        buf.put("ads".toByteArray(Charsets.US_ASCII))
+        buf.put(3.toByte())
+        buf.put("com".toByteArray(Charsets.US_ASCII))
+        buf.put(0.toByte())
+        buf.putShort(DnsPacket.TYPE_A.toShort())
+        buf.putShort(1.toShort())
+
+        val raw = ByteArray(buf.position())
+        System.arraycopy(buf.array(), 0, raw, 0, raw.size)
+        val query = DnsPacket.parse(raw)!!
+
+        val responseBytes = DnsPacket.buildBlockedResponse(
+            query = query,
+            asNxDomain = false,
+            includeEde = true,
+            edeText = "Filtered by ClearShield"
+        )
+
+        val parsed = DnsPacket.parse(responseBytes)
+        assertNotNull(parsed)
+        assertEquals(1, parsed!!.header.anCount)
+        assertEquals(1, parsed.header.arCount)
+    }
 }
