@@ -272,6 +272,42 @@ fun DiagnosticsScreen() {
             }
         }
 
+        // Engine Memory & Buffer Telemetry Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = DarkCard),
+            border = BorderStroke(1.dp, SlateNavy.copy(alpha = 0.5f))
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Engine Memory & Buffer Telemetry",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                )
+                Text(
+                    text = "Live zero-copy packet buffer pools and radix trie structural memory",
+                    style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                val poolStats = VpnStateHolder.getBufferPoolStats()
+                val engineStats = VpnStateHolder.getFilterEngineStats()
+                val memoryMb = String.format("%.2f MB", engineStats.second / (1024.0 * 1024.0))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    CounterPill(modifier = Modifier.weight(1f), label = "Trie Nodes", count = "${engineStats.first}", color = CyanAccent)
+                    CounterPill(modifier = Modifier.weight(1f), label = "Trie Memory", count = memoryMb, color = MintGreen)
+                    CounterPill(modifier = Modifier.weight(1f), label = "Pool Buffers", count = "${poolStats.third}", color = AmberWarning)
+                }
+            }
+        }
+
         // Filter Engine Verification Tool Card
         Card(
             modifier = Modifier.fillMaxWidth(),

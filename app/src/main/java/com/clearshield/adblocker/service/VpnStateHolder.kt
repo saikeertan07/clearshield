@@ -150,4 +150,14 @@ object VpnStateHolder {
         queryLogQueue.clear()
         _recentQueries.value = emptyList()
     }
+
+    fun getBufferPoolStats(): Triple<Long, Long, Int> {
+        val pool = com.clearshield.adblocker.engine.dns.PacketBufferPool.defaultInstance
+        return Triple(pool.acquiredCount, pool.recycledCount, pool.pooledCount)
+    }
+
+    fun getFilterEngineStats(): Pair<Int, Long> {
+        val engine = com.clearshield.adblocker.engine.filter.FilterEngine.instance
+        return Pair(engine.totalTrieNodes, engine.estimatedMemoryUsageBytes)
+    }
 }
