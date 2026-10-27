@@ -21,6 +21,18 @@ data class FilterSnapshot(
 
     val totalAllowedRules: Int
         get() = explicitAllowTrie.size
+
+    val estimatedMemoryUsageBytes: Long
+        get() = explicitAllowTrie.estimateMemoryUsageBytes() +
+                customBlockTrie.estimateMemoryUsageBytes() +
+                subscriptionBlockTrie.estimateMemoryUsageBytes() +
+                defaultBlockTrie.estimateMemoryUsageBytes()
+
+    val totalNodes: Int
+        get() = explicitAllowTrie.totalNodeCount +
+                customBlockTrie.totalNodeCount +
+                subscriptionBlockTrie.totalNodeCount +
+                defaultBlockTrie.totalNodeCount
 }
 
 class FilterEngine {
@@ -38,6 +50,12 @@ class FilterEngine {
     val totalAllowedRules: Int
         get() = snapshot.totalAllowedRules
 
+    val estimatedMemoryUsageBytes: Long
+        get() = snapshot.estimatedMemoryUsageBytes
+
+    val totalTrieNodes: Int
+        get() = snapshot.totalNodes
+
     /**
      * Loads rules partitioned by priority tiers:
      * Tier 1: Explicit Allowlist (User trusted domains)
@@ -52,16 +70,16 @@ class FilterEngine {
         defaultBlock: List<FilterRule>
     ) {
         val allowTrie = DomainTrie()
-        for (r in explicitAllow) allowTrie.insert(r)
+        allowTrie.insertAll(explicitAllow)
 
         val customTrie = DomainTrie()
-        for (r in customBlock) customTrie.insert(r)
+        customTrie.insertAll(customBlock)
 
         val subTrie = DomainTrie()
-        for (r in subscriptionBlock) subTrie.insert(r)
+        subTrie.insertAll(subscriptionBlock)
 
         val defTrie = DomainTrie()
-        for (r in defaultBlock) defTrie.insert(r)
+        defTrie.insertAll(defaultBlock)
 
         snapshot = FilterSnapshot(
             explicitAllowTrie = allowTrie,

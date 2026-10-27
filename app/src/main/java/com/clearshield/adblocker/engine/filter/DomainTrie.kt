@@ -25,6 +25,10 @@ class DomainTrie {
     private val root = TrieNode()
     var size: Int = 0
         private set
+    var totalNodeCount: Int = 1
+        private set
+    var subdomainRuleCount: Int = 0
+        private set
 
     fun insert(rule: FilterRule) {
         val cleanDomain = normalize(rule.domain)
@@ -33,7 +37,10 @@ class DomainTrie {
         var current = root
 
         for (part in parts) {
-            current = current.children.getOrPut(part) { TrieNode() }
+            current = current.children.getOrPut(part) {
+                totalNodeCount++
+                TrieNode()
+            }
         }
 
         if (!current.isTerminal) {
@@ -41,7 +48,26 @@ class DomainTrie {
         }
         current.isTerminal = true
         current.rule = rule
+        if (!current.matchesSubdomains && rule.matchSubdomains) {
+            subdomainRuleCount++
+        }
         current.matchesSubdomains = rule.matchSubdomains
+    }
+
+    /**
+     * Efficiently ingests a collection of rules in a single batch.
+     */
+    fun insertAll(rules: Collection<FilterRule>) {
+        for (rule in rules) {
+            insert(rule)
+        }
+    }
+
+    /**
+     * Estimates approximate memory usage of the Radix Trie in bytes (64-bit JVM architecture).
+     */
+    fun estimateMemoryUsageBytes(): Long {
+        return totalNodeCount * 128L
     }
 
     /**
@@ -82,5 +108,7 @@ class DomainTrie {
     fun clear() {
         root.children.clear()
         size = 0
+        totalNodeCount = 1
+        subdomainRuleCount = 0
     }
 }
