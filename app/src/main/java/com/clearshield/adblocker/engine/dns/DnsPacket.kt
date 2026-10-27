@@ -58,6 +58,12 @@ class DnsPacket(
         const val TYPE_SVCB = 64
         const val TYPE_HTTPS = 65
         const val TYPE_ANY = 255
+        const val TYPE_OPT = 41 // RFC 6891 EDNS(0)
+
+        // RFC 8914 Extended DNS Error (EDE) Option Codes
+        const val EDE_OPTION_CODE = 15
+        const val EDE_INFO_CODE_FILTERED = 17 // Prohibited by administrative/ad-blocker filtering
+        const val EDE_INFO_CODE_BLOCKED = 22 // Blocked by administrative policy
 
         const val CLASS_IN = 1
 
@@ -206,11 +212,14 @@ class DnsPacket(
          * - For AAAA: returns :: (NOERROR)
          * - For HTTPS/SVCB/TXT/etc.: returns NODATA (NOERROR with ANCOUNT = 0)
          * - If asNxDomain = true: returns NXDOMAIN (RCODE = 3)
+         * - If includeEde = true: appends RFC 8914 Extended DNS Error (EDE) OPT RR (code 17 Filtered)
          */
         fun buildBlockedResponse(
             query: DnsPacket,
             asNxDomain: Boolean = false,
-            ttlSeconds: Int = 300
+            ttlSeconds: Int = 300,
+            includeEde: Boolean = false,
+            edeText: String = "Blocked by ClearShield"
         ): ByteArray {
             val question = query.questions.firstOrNull()
             val out = ByteBuffer.allocate(512).order(ByteOrder.BIG_ENDIAN)
@@ -236,7 +245,7 @@ class DnsPacket(
 
             out.putShort((if (hasAnswer) 1 else 0).toShort()) // ANCOUNT
             out.putShort(0.toShort()) // NSCOUNT
-            out.putShort(0.toShort()) // ARCOUNT
+            out.putShort((if (includeEde) 1 else 0).toShort()) // ARCOUNT (EDNS0 OPT RR)
 
             // 4. Question Section
             if (question != null) {
@@ -263,6 +272,27 @@ class DnsPacket(
                         out.put(0.toByte()) // ::
                     }
                 }
+            }
+
+            // 6. Additional Section (RFC 6891 EDNS0 OPT RR with RFC 8914 EDE)
+            if (includeEde) {
+                val textBytes = edeText.toByteArray(Charsets.UTF_8)
+                val optionDataLen = 2 + textBytes.size // 2 bytes info-code + text
+                val rdLength = 4 + optionDataLen // 2 bytes option code + 2 bytes option len + data
+
+                out.put(0.toByte()) // Root name (empty label)
+                out.putShort(TYPE_OPT.toShort()) // Type 41 (OPT)
+                out.putShort(1232.toShort()) // UDP Payload Size (RFC 8900 recommended MTU safe buffer)
+                out.put(0.toByte()) // Extended RCODE (0)
+                out.put(0.toByte()) // EDNS Version (0)
+                out.putShort(0.toShort()) // Flags (DO = 0, Z = 0)
+                out.putShort(rdLength.toShort()) // RDLENGTH
+
+                // Option 15: Extended DNS Error (RFC 8914)
+                out.putShort(EDE_OPTION_CODE.toShort()) // Option Code 15
+                out.putShort(optionDataLen.toShort()) // Option Length
+                out.putShort(EDE_INFO_CODE_FILTERED.toShort()) // INFO-CODE 17 (Filtered)
+                out.put(textBytes) // EXTRA-TEXT
             }
 
             val result = ByteArray(out.position())
