@@ -308,50 +308,57 @@ class IpPacket(
         ): ByteArray {
             val udpLength = UDP_HEADER_LEN + udpPayload.size
             val ipTotalLength = IPV4_MIN_HEADER_LEN + udpLength
-            val out = ByteBuffer.allocate(ipTotalLength).order(ByteOrder.BIG_ENDIAN)
+            val out = PacketBufferPool.defaultInstance.acquire(ipTotalLength)
 
-            // IPv4 Header (20 bytes, no options)
-            out.put(0x45.toByte()) // Version 4, IHL 5 (20 bytes)
-            out.put(0x00.toByte()) // DSCP/ECN
-            out.putShort(ipTotalLength.toShort())
-            out.putShort(((originalPacket.identification + 1) and 0xFFFF).toShort())
-            out.putShort(0x4000.toShort()) // Flags: Don't Fragment (DF), Fragment offset: 0
-            out.put(64.toByte()) // TTL = 64
-            out.put(PROTOCOL_UDP.toByte()) // Protocol = 17 (UDP)
-            out.putShort(0.toShort()) // Checksum placeholder
+            return try {
+                out.clear()
+                // IPv4 Header (20 bytes, no options)
+                out.put(0x45.toByte()) // Version 4, IHL 5 (20 bytes)
+                out.put(0x00.toByte()) // DSCP/ECN
+                out.putShort(ipTotalLength.toShort())
+                out.putShort(((originalPacket.identification + 1) and 0xFFFF).toShort())
+                out.putShort(0x4000.toShort()) // Flags: Don't Fragment (DF), Fragment offset: 0
+                out.put(64.toByte()) // TTL = 64
+                out.put(PROTOCOL_UDP.toByte()) // Protocol = 17 (UDP)
+                out.putShort(0.toShort()) // Checksum placeholder
 
-            // Swap Source IP (was dstIp) and Destination IP (was srcIp)
-            out.put(originalPacket.dstIp)
-            out.put(originalPacket.srcIp)
+                // Swap Source IP (was dstIp) and Destination IP (was srcIp)
+                out.put(originalPacket.dstIp)
+                out.put(originalPacket.srcIp)
 
-            // Calculate IPv4 Header Checksum
-            val ipChecksum = computeOneComplementChecksum(out.array(), 0, IPV4_MIN_HEADER_LEN)
-            out.putShort(10, ipChecksum.toShort())
+                // Calculate IPv4 Header Checksum
+                val ipChecksum = computeOneComplementChecksum(out.array(), 0, IPV4_MIN_HEADER_LEN)
+                out.putShort(10, ipChecksum.toShort())
 
-            // UDP Header
-            val origUdp = originalPacket.udpHeader
-            val srcPort = origUdp?.dstPort ?: 53
-            val dstPort = origUdp?.srcPort ?: 0
+                // UDP Header
+                val origUdp = originalPacket.udpHeader
+                val srcPort = origUdp?.dstPort ?: 53
+                val dstPort = origUdp?.srcPort ?: 0
 
-            val udpStart = IPV4_MIN_HEADER_LEN
-            out.position(udpStart)
-            out.putShort(srcPort.toShort())
-            out.putShort(dstPort.toShort())
-            out.putShort(udpLength.toShort())
-            out.putShort(0.toShort()) // Checksum placeholder
-            out.put(udpPayload)
+                val udpStart = IPV4_MIN_HEADER_LEN
+                out.position(udpStart)
+                out.putShort(srcPort.toShort())
+                out.putShort(dstPort.toShort())
+                out.putShort(udpLength.toShort())
+                out.putShort(0.toShort()) // Checksum placeholder
+                out.put(udpPayload)
 
-            // Compute RFC 768 UDP Checksum (with IPv4 Pseudo-header)
-            val udpChecksum = computeUdpChecksum(
-                srcIp = originalPacket.dstIp,
-                dstIp = originalPacket.srcIp,
-                udpData = out.array(),
-                offset = udpStart,
-                length = udpLength
-            )
-            out.putShort(udpStart + 6, udpChecksum.toShort())
+                // Compute RFC 768 UDP Checksum (with IPv4 Pseudo-header)
+                val udpChecksum = computeUdpChecksum(
+                    srcIp = originalPacket.dstIp,
+                    dstIp = originalPacket.srcIp,
+                    udpData = out.array(),
+                    offset = udpStart,
+                    length = udpLength
+                )
+                out.putShort(udpStart + 6, udpChecksum.toShort())
 
-            return out.array()
+                val result = ByteArray(ipTotalLength)
+                System.arraycopy(out.array(), 0, result, 0, ipTotalLength)
+                result
+            } finally {
+                PacketBufferPool.defaultInstance.recycle(out)
+            }
         }
 
         private fun buildIpv6ResponsePacket(
@@ -360,42 +367,49 @@ class IpPacket(
         ): ByteArray {
             val udpLength = UDP_HEADER_LEN + udpPayload.size
             val ipTotalLength = IPV6_HEADER_LEN + udpLength
-            val out = ByteBuffer.allocate(ipTotalLength).order(ByteOrder.BIG_ENDIAN)
+            val out = PacketBufferPool.defaultInstance.acquire(ipTotalLength)
 
-            // IPv6 Header (40 bytes fixed)
-            out.putInt(0x60000000) // Version 6, Traffic Class 0, Flow Label 0
-            out.putShort(udpLength.toShort()) // Payload length = UDP Header + Payload
-            out.put(PROTOCOL_UDP.toByte()) // Next Header = 17 (UDP)
-            out.put(64.toByte()) // Hop Limit = 64
+            return try {
+                out.clear()
+                // IPv6 Header (40 bytes fixed)
+                out.putInt(0x60000000) // Version 6, Traffic Class 0, Flow Label 0
+                out.putShort(udpLength.toShort()) // Payload length = UDP Header + Payload
+                out.put(PROTOCOL_UDP.toByte()) // Next Header = 17 (UDP)
+                out.put(64.toByte()) // Hop Limit = 64
 
-            // Swap Source IP (was dstIp) and Destination IP (was srcIp)
-            out.put(originalPacket.dstIp)
-            out.put(originalPacket.srcIp)
+                // Swap Source IP (was dstIp) and Destination IP (was srcIp)
+                out.put(originalPacket.dstIp)
+                out.put(originalPacket.srcIp)
 
-            // UDP Header
-            val origUdp = originalPacket.udpHeader
-            val srcPort = origUdp?.dstPort ?: 53
-            val dstPort = origUdp?.srcPort ?: 0
+                // UDP Header
+                val origUdp = originalPacket.udpHeader
+                val srcPort = origUdp?.dstPort ?: 53
+                val dstPort = origUdp?.srcPort ?: 0
 
-            val udpStart = IPV6_HEADER_LEN
-            out.position(udpStart)
-            out.putShort(srcPort.toShort())
-            out.putShort(dstPort.toShort())
-            out.putShort(udpLength.toShort())
-            out.putShort(0.toShort()) // Checksum placeholder
-            out.put(udpPayload)
+                val udpStart = IPV6_HEADER_LEN
+                out.position(udpStart)
+                out.putShort(srcPort.toShort())
+                out.putShort(dstPort.toShort())
+                out.putShort(udpLength.toShort())
+                out.putShort(0.toShort()) // Checksum placeholder
+                out.put(udpPayload)
 
-            // Compute RFC 8200 IPv6 UDP Checksum (with IPv6 Pseudo-header)
-            val udpChecksum = computeIpv6UdpChecksum(
-                srcIp = originalPacket.dstIp,
-                dstIp = originalPacket.srcIp,
-                udpData = out.array(),
-                offset = udpStart,
-                length = udpLength
-            )
-            out.putShort(udpStart + 6, udpChecksum.toShort())
+                // Compute RFC 8200 IPv6 UDP Checksum (with IPv6 Pseudo-header)
+                val udpChecksum = computeIpv6UdpChecksum(
+                    srcIp = originalPacket.dstIp,
+                    dstIp = originalPacket.srcIp,
+                    udpData = out.array(),
+                    offset = udpStart,
+                    length = udpLength
+                )
+                out.putShort(udpStart + 6, udpChecksum.toShort())
 
-            return out.array()
+                val result = ByteArray(ipTotalLength)
+                System.arraycopy(out.array(), 0, result, 0, ipTotalLength)
+                result
+            } finally {
+                PacketBufferPool.defaultInstance.recycle(out)
+            }
         }
 
         fun computeOneComplementChecksum(data: ByteArray, offset: Int, length: Int): Int {
@@ -429,81 +443,88 @@ class IpPacket(
             val tcpHeaderLen = 20
             val totalLen = ipHeaderLen + tcpHeaderLen
 
-            val out = ByteBuffer.allocate(totalLen).order(ByteOrder.BIG_ENDIAN)
+            val out = PacketBufferPool.defaultInstance.acquire(totalLen)
 
-            val isSyn = (inTcp.flags and 0x0002) != 0
-            val outSeq: Long
-            val outAck: Long
-            val outFlags: Int
+            return try {
+                out.clear()
+                val isSyn = (inTcp.flags and 0x0002) != 0
+                val outSeq: Long
+                val outAck: Long
+                val outFlags: Int
 
-            if (isSyn) {
-                // Incoming SYN: ACK = in.seq + 1, SEQ = 0, Flags = RST | ACK (0x0014)
-                outSeq = 0L
-                outAck = (inTcp.seqNumber + 1) and 0xFFFFFFFFL
-                outFlags = 0x0014
-            } else {
-                // Non-SYN: SEQ = in.ack, ACK = 0, Flags = RST (0x0004)
-                outSeq = inTcp.ackNumber
-                outAck = 0L
-                outFlags = 0x0004
+                if (isSyn) {
+                    // Incoming SYN: ACK = in.seq + 1, SEQ = 0, Flags = RST | ACK (0x0014)
+                    outSeq = 0L
+                    outAck = (inTcp.seqNumber + 1) and 0xFFFFFFFFL
+                    outFlags = 0x0014
+                } else {
+                    // Non-SYN: SEQ = in.ack, ACK = 0, Flags = RST (0x0004)
+                    outSeq = inTcp.ackNumber
+                    outAck = 0L
+                    outFlags = 0x0004
+                }
+
+                if (isIpv6) {
+                    out.putInt(0x60000000)
+                    out.putShort(tcpHeaderLen.toShort())
+                    out.put(PROTOCOL_TCP.toByte())
+                    out.put(64.toByte())
+                    out.put(incomingPacket.dstIp) // Swap IP
+                    out.put(incomingPacket.srcIp)
+                } else {
+                    out.put(0x45.toByte())
+                    out.put(0.toByte())
+                    out.putShort(totalLen.toShort())
+                    out.putShort(((incomingPacket.identification + 1) and 0xFFFF).toShort())
+                    out.putShort(0x4000.toShort()) // DF = 1
+                    out.put(64.toByte())
+                    out.put(PROTOCOL_TCP.toByte())
+                    out.putShort(0.toShort())
+                    out.put(incomingPacket.dstIp) // Swap IP
+                    out.put(incomingPacket.srcIp)
+
+                    val ipChecksum = computeOneComplementChecksum(out.array(), 0, IPV4_MIN_HEADER_LEN)
+                    out.putShort(10, ipChecksum.toShort())
+                }
+
+                val tcpStart = ipHeaderLen
+                out.position(tcpStart)
+                out.putShort(inTcp.dstPort.toShort()) // Swap Port
+                out.putShort(inTcp.srcPort.toShort())
+                out.putInt(outSeq.toInt())
+                out.putInt(outAck.toInt())
+                out.putShort(((5 shl 12) or outFlags).toShort()) // Data Offset (5 = 20B) + Flags
+                out.putShort(0.toShort()) // Window = 0
+                out.putShort(0.toShort()) // Checksum placeholder
+                out.putShort(0.toShort()) // Urgent pointer = 0
+
+                val tcpChecksum = if (isIpv6) {
+                    computeIpv6PseudoHeaderChecksum(
+                        srcIp = incomingPacket.dstIp,
+                        dstIp = incomingPacket.srcIp,
+                        protocol = PROTOCOL_TCP,
+                        transportData = out.array(),
+                        offset = tcpStart,
+                        length = tcpHeaderLen
+                    )
+                } else {
+                    computeIpv4PseudoHeaderChecksum(
+                        srcIp = incomingPacket.dstIp,
+                        dstIp = incomingPacket.srcIp,
+                        protocol = PROTOCOL_TCP,
+                        transportData = out.array(),
+                        offset = tcpStart,
+                        length = tcpHeaderLen
+                    )
+                }
+                out.putShort(tcpStart + 16, tcpChecksum.toShort())
+
+                val result = ByteArray(totalLen)
+                System.arraycopy(out.array(), 0, result, 0, totalLen)
+                result
+            } finally {
+                PacketBufferPool.defaultInstance.recycle(out)
             }
-
-            if (isIpv6) {
-                out.putInt(0x60000000)
-                out.putShort(tcpHeaderLen.toShort())
-                out.put(PROTOCOL_TCP.toByte())
-                out.put(64.toByte())
-                out.put(incomingPacket.dstIp) // Swap IP
-                out.put(incomingPacket.srcIp)
-            } else {
-                out.put(0x45.toByte())
-                out.put(0.toByte())
-                out.putShort(totalLen.toShort())
-                out.putShort(((incomingPacket.identification + 1) and 0xFFFF).toShort())
-                out.putShort(0x4000.toShort()) // DF = 1
-                out.put(64.toByte())
-                out.put(PROTOCOL_TCP.toByte())
-                out.putShort(0.toShort())
-                out.put(incomingPacket.dstIp) // Swap IP
-                out.put(incomingPacket.srcIp)
-
-                val ipChecksum = computeOneComplementChecksum(out.array(), 0, IPV4_MIN_HEADER_LEN)
-                out.putShort(10, ipChecksum.toShort())
-            }
-
-            val tcpStart = ipHeaderLen
-            out.position(tcpStart)
-            out.putShort(inTcp.dstPort.toShort()) // Swap Port
-            out.putShort(inTcp.srcPort.toShort())
-            out.putInt(outSeq.toInt())
-            out.putInt(outAck.toInt())
-            out.putShort(((5 shl 12) or outFlags).toShort()) // Data Offset (5 = 20B) + Flags
-            out.putShort(0.toShort()) // Window = 0
-            out.putShort(0.toShort()) // Checksum placeholder
-            out.putShort(0.toShort()) // Urgent pointer = 0
-
-            val tcpChecksum = if (isIpv6) {
-                computeIpv6PseudoHeaderChecksum(
-                    srcIp = incomingPacket.dstIp,
-                    dstIp = incomingPacket.srcIp,
-                    protocol = PROTOCOL_TCP,
-                    transportData = out.array(),
-                    offset = tcpStart,
-                    length = tcpHeaderLen
-                )
-            } else {
-                computeIpv4PseudoHeaderChecksum(
-                    srcIp = incomingPacket.dstIp,
-                    dstIp = incomingPacket.srcIp,
-                    protocol = PROTOCOL_TCP,
-                    transportData = out.array(),
-                    offset = tcpStart,
-                    length = tcpHeaderLen
-                )
-            }
-            out.putShort(tcpStart + 16, tcpChecksum.toShort())
-
-            return out.array()
         }
 
         fun computeUdpChecksum(
