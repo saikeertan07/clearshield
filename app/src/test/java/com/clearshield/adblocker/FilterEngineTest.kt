@@ -350,4 +350,42 @@ class FilterEngineTest {
         assertNull("Must NOT match ads.example.com.attacker.org", trie.match("ads.example.com.attacker.org"))
         assertNull("Must NOT match example.com", trie.match("example.com"))
     }
+
+    @Test
+    fun testTrieNodeCountAndMemoryEstimation() {
+        val trie = DomainTrie()
+        assertEquals(0, trie.size)
+        assertEquals(1, trie.totalNodeCount)
+        assertEquals(128L, trie.estimateMemoryUsageBytes())
+
+        trie.insert(FilterRule("tracker.example.com", RuleType.BLOCK, true, ThreatCategory.TRACKER, "||tracker.example.com^"))
+        assertEquals(1, trie.size)
+        assertEquals(4, trie.totalNodeCount)
+        assertEquals(1, trie.subdomainRuleCount)
+        assertEquals(4 * 128L, trie.estimateMemoryUsageBytes())
+
+        trie.insert(FilterRule("analytics.example.com", RuleType.BLOCK, false, ThreatCategory.TRACKER, "|analytics.example.com"))
+        assertEquals(2, trie.size)
+        assertEquals(5, trie.totalNodeCount)
+
+        trie.clear()
+        assertEquals(0, trie.size)
+        assertEquals(1, trie.totalNodeCount)
+    }
+
+    @Test
+    fun testTrieBulkIngestionConsistency() {
+        val trie = DomainTrie()
+        val rules = listOf(
+            FilterRule("ad1.com", RuleType.BLOCK, true, ThreatCategory.AD, "||ad1.com^"),
+            FilterRule("ad2.com", RuleType.BLOCK, true, ThreatCategory.AD, "||ad2.com^"),
+            FilterRule("ad3.org", RuleType.BLOCK, false, ThreatCategory.AD, "ad3.org")
+        )
+        trie.insertAll(rules)
+        assertEquals(3, trie.size)
+        assertNotNull(trie.match("sub.ad1.com"))
+        assertNotNull(trie.match("sub.ad2.com"))
+        assertNotNull(trie.match("ad3.org"))
+        assertNull(trie.match("sub.ad3.org"))
+    }
 }
