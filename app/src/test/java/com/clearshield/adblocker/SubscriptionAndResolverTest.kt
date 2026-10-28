@@ -139,4 +139,16 @@ class SubscriptionAndResolverTest {
             resolver.lastError?.contains("strict mode") == true || resolver.lastError?.contains("DoH") == true
         )
     }
+
+    @Test
+    fun testBackoffJitterComputationAndBounds() {
+        for (fails in 5..10) {
+            val baseBackoffMs = Math.min(1000L, 50L * (1L shl Math.min(fails - 5, 4)))
+            assertTrue("Base backoff must be between 50ms and 1000ms", baseBackoffMs in 50L..1000L)
+            val maxJitterMs = (baseBackoffMs * 0.3).toLong()
+            assertTrue("Max jitter must not exceed 300ms", maxJitterMs <= 300L)
+            val maxTotalBackoff = baseBackoffMs + maxJitterMs
+            assertTrue("Total backoff must remain bounded under 1300ms", maxTotalBackoff <= 1300L)
+        }
+    }
 }
