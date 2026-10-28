@@ -254,4 +254,17 @@ class DnsResponseCacheTest {
         assertEquals("No concurrency errors should occur during multithreaded cache operations", 0, errors.get())
         assertTrue("Cache size should be bounded by max entries", cache.size <= 100)
     }
+
+    @Test
+    fun testConsecutiveDotsKeyNormalizationAndTtlBounds() {
+        val keyWithDots = DnsCacheKey.create("cdn..example...com.", 1, 1, "8.8.8.8")
+        val cleanKey = DnsCacheKey.create("cdn.example.com", 1, 1, "8.8.8.8")
+        assertEquals("Consecutive and trailing dots must normalize to identical cache keys", cleanKey, keyWithDots)
+
+        val cache = DnsResponseCache(maxEntries = 10)
+        cache.put(cleanKey, buildMockDnsResponse(qName = "cdn.example.com", ttlSeconds = 60))
+
+        val hit = cache.get(keyWithDots, 0x5555)
+        assertNotNull("Query with consecutive dots should hit normalized cache key", hit)
+    }
 }
