@@ -388,4 +388,19 @@ class FilterEngineTest {
         assertNotNull(trie.match("ad3.org"))
         assertNull(trie.match("sub.ad3.org"))
     }
+
+    @Test
+    fun testConsecutiveDotsNormalizationAndLabelDepthGuard() {
+        val trie = DomainTrie()
+        val rule = FilterRule("ads..doubleclick...net", RuleType.BLOCK, true, ThreatCategory.AD, "||ads..doubleclick...net^")
+        trie.insert(rule)
+
+        assertEquals(1, trie.size)
+        assertNotNull("Should match normalized query ads.doubleclick.net", trie.match("ads.doubleclick.net"))
+        assertNotNull("Should match query with duplicate dots ads...doubleclick.net", trie.match("ads...doubleclick.net"))
+        assertNotNull("Should match subdomain tracking.ads.doubleclick.net", trie.match("tracking.ads.doubleclick.net"))
+
+        val excessiveLabels = (1..130).joinToString(".") { "sub$it" } + ".com"
+        assertNull("Pathological domain exceeding 127 labels must return null", trie.match(excessiveLabels))
+    }
 }
