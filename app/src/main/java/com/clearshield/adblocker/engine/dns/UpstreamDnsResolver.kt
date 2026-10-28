@@ -212,9 +212,11 @@ class UpstreamDnsResolver(
     ): ByteArray? {
         val fails = consecutiveFailures.get()
         if (fails >= 5) {
-            val backoffMs = Math.min(1000L, 50L * (1L shl Math.min(fails - 5, 4)))
+            val baseBackoffMs = Math.min(1000L, 50L * (1L shl Math.min(fails - 5, 4)))
+            val jitterMs = (Math.random() * (baseBackoffMs * 0.3)).toLong()
+            val totalBackoffMs = baseBackoffMs + jitterMs
             try {
-                Thread.sleep(backoffMs)
+                Thread.sleep(totalBackoffMs)
             } catch (_: InterruptedException) {
                 return null
             }
@@ -297,6 +299,12 @@ class UpstreamDnsResolver(
             okHttpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     lastError = "DoH HTTP ${response.code} from $url"
+                    return null
+                }
+                val contentType = response.header("Content-Type")?.lowercase()
+                if (contentType != null && !contentType.startsWith("application/dns-message") && !contentType.startsWith("application/octet-stream")) {
+                    lastError = "Invalid DoH Content-Type: $contentType from $url"
+                    Log.w(TAG, "Discarded DoH response with non-DNS media type: $contentType")
                     return null
                 }
                 val body = response.body ?: return null
