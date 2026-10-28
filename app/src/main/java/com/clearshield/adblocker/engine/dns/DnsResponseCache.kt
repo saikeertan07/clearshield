@@ -19,6 +19,9 @@ data class DnsCacheKey(
             var n = rawQName.trim().lowercase()
             while (n.startsWith(".")) n = n.substring(1)
             while (n.endsWith(".")) n = n.substring(0, n.length - 1)
+            if (n.contains("..")) {
+                n = n.replace(Regex("\\.+"), ".")
+            }
             return DnsCacheKey(
                 qName = n,
                 qType = qType,
@@ -117,7 +120,7 @@ class DnsResponseCache(
             for (offset in entry.ttlByteOffsets) {
                 if (offset + 4 <= cachedData.size) {
                     val origTtl = buf.getInt(offset).toLong() and 0xFFFFFFFFL
-                    val newTtl = (origTtl - elapsedSeconds).coerceAtLeast(1L)
+                    val newTtl = (origTtl - elapsedSeconds).coerceIn(1L, origTtl)
                     buf.putInt(offset, newTtl.toInt())
                 }
             }
