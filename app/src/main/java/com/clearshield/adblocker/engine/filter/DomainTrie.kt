@@ -14,6 +14,10 @@ class DomainTrie {
             while (d.startsWith(".")) d = d.substring(1)
             while (d.endsWith(".")) d = d.substring(0, d.length - 1)
             if (d.isEmpty()) return ""
+            // Deduplicate consecutive dots (e.g. "ads..google.com" -> "ads.google.com")
+            if (d.contains("..")) {
+                d = d.replace(Regex("\\.+"), ".")
+            }
             return try {
                 java.net.IDN.toASCII(d, java.net.IDN.ALLOW_UNASSIGNED)
             } catch (_: Exception) {
@@ -32,8 +36,9 @@ class DomainTrie {
 
     fun insert(rule: FilterRule) {
         val cleanDomain = normalize(rule.domain)
-        if (cleanDomain.isEmpty()) return
+        if (cleanDomain.isEmpty() || cleanDomain.length > 255) return
         val parts = cleanDomain.split('.').filter { it.isNotEmpty() }.reversed()
+        if (parts.size > 127) return // RFC 1035 maximum label depth guard
         var current = root
 
         for (part in parts) {
@@ -78,8 +83,9 @@ class DomainTrie {
      */
     fun match(domain: String): FilterRule? {
         val cleanDomain = normalize(domain)
-        if (cleanDomain.isEmpty()) return null
+        if (cleanDomain.isEmpty() || cleanDomain.length > 255) return null
         val parts = cleanDomain.split('.').filter { it.isNotEmpty() }.reversed()
+        if (parts.size > 127) return null
         var current = root
 
         var subdomainMatchedRule: FilterRule? = null
