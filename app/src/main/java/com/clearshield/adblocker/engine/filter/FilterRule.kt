@@ -97,6 +97,9 @@ data class FilterRule(
 
             // Normalize: trim, lowercase, strip trailing and leading dots/wildcards
             domain = domain.trim().lowercase().trimStart('*', '.').trimEnd('.')
+            if (domain.contains("..")) {
+                domain = domain.replace(Regex("\\.+"), ".")
+            }
 
             // Validate domain
             if (domain.isEmpty() || !domain.contains('.') || domain.length > 253 || domain.contains(" ")) {

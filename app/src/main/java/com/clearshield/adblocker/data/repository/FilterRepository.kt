@@ -26,6 +26,20 @@ class FilterRepository(
 ) {
     companion object {
         private const val TAG = "FilterRepository"
+
+        fun sanitizeDomainInput(raw: String): String {
+            var clean = raw.trim().lowercase()
+            clean = clean.removePrefix("https://").removePrefix("http://")
+            clean = clean.removePrefix("@@||").removePrefix("||").removePrefix("@@")
+            clean = clean.removeSuffix("^")
+            if (clean.contains("/")) clean = clean.substringBefore("/")
+            if (clean.contains(":") && !clean.contains("::")) clean = clean.substringBefore(":")
+            clean = clean.trimStart('*', '.').trimEnd('.')
+            if (clean.contains("..")) {
+                clean = clean.replace(Regex("\\.+"), ".")
+            }
+            return clean
+        }
     }
 
     private val filterDir: File
@@ -79,7 +93,7 @@ class FilterRepository(
         try {
             val allowItems = filterDao.getEnabledAllowlist()
             for (item in allowItems) {
-                val clean = item.domain.trim().lowercase().trimStart('*', '.').trimEnd('.')
+                val clean = sanitizeDomainInput(item.domain)
                 if (clean.isNotEmpty()) {
                     val rule = FilterRule(
                         domain = clean,
@@ -99,7 +113,7 @@ class FilterRepository(
         try {
             val customBlocks = filterDao.getEnabledCustomBlocklist()
             for (item in customBlocks) {
-                val clean = item.domain.trim().lowercase().trimStart('*', '.').trimEnd('.')
+                val clean = sanitizeDomainInput(item.domain)
                 if (clean.isNotEmpty()) {
                     val rule = FilterRule(
                         domain = clean,
@@ -242,7 +256,7 @@ class FilterRepository(
     }
 
     suspend fun addAllowlist(domain: String) = withContext(Dispatchers.IO) {
-        val clean = domain.trim().lowercase().trimStart('*', '.').trimEnd('.')
+        val clean = sanitizeDomainInput(domain)
         if (clean.isNotEmpty()) {
             filterDao.insertAllowlist(AllowlistEntity(domain = clean))
             reloadAndCompileAllRules()
@@ -260,7 +274,7 @@ class FilterRepository(
     }
 
     suspend fun addCustomBlock(domain: String) = withContext(Dispatchers.IO) {
-        val clean = domain.trim().lowercase().trimStart('*', '.').trimEnd('.')
+        val clean = sanitizeDomainInput(domain)
         if (clean.isNotEmpty()) {
             filterDao.insertCustomBlock(CustomBlockEntity(domain = clean))
             reloadAndCompileAllRules()
