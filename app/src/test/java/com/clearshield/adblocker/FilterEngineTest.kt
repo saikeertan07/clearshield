@@ -403,4 +403,18 @@ class FilterEngineTest {
         val excessiveLabels = (1..130).joinToString(".") { "sub$it" } + ".com"
         assertNull("Pathological domain exceeding 127 labels must return null", trie.match(excessiveLabels))
     }
+
+    @Test
+    fun testFilterRuleSanitizationAndConsecutiveDots() {
+        val rule1 = FilterRule.parse("||ads..doubleclick...net^")
+        assertNotNull("FilterRule should parse rules with consecutive dots", rule1)
+        assertEquals("ads.doubleclick.net", rule1!!.domain)
+
+        val rule2 = FilterRule.parse("https://tracker.analytics.com/beacon?id=123")
+        assertNotNull("FilterRule should strip protocol and URL path", rule2)
+        assertEquals("tracker.analytics.com", rule2!!.domain)
+
+        val sanitized = com.clearshield.adblocker.data.repository.FilterRepository.sanitizeDomainInput("https://||badads..org:8080/ad.js^")
+        assertEquals("badads.org", sanitized)
+    }
 }

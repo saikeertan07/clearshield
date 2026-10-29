@@ -26,7 +26,7 @@ data class FilterRule(
         )
 
         fun parse(line: String): FilterRule? {
-            val trimmed = line.trim()
+            var trimmed = line.trim()
             if (trimmed.isEmpty() || trimmed.startsWith("!") || trimmed.startsWith("#") || trimmed.startsWith("[")) {
                 return null
             }
@@ -38,6 +38,13 @@ data class FilterRule(
                 trimmed.startsWith("/") || trimmed.startsWith("@@/") || trimmed.contains("$$")
             ) {
                 return null
+            }
+
+            // Strip scheme prefix if present
+            if (trimmed.startsWith("https://", ignoreCase = true)) {
+                trimmed = trimmed.substring(8)
+            } else if (trimmed.startsWith("http://", ignoreCase = true)) {
+                trimmed = trimmed.substring(7)
             }
 
             var domain = ""
