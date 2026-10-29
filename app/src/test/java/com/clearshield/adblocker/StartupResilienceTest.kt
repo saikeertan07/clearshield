@@ -158,4 +158,37 @@ class StartupResilienceTest {
         assertTrue("Must contain trackersBlocked column", sql.contains("trackersblocked"))
         assertFalse("Must never drop existing tables during migration", sql.contains("drop table"))
     }
+
+    @Test
+    fun testVpnStateTransitionResilience() {
+        // Initial transition to starting
+        VpnStateHolder.setStatus(VpnStatus.STARTING)
+        assertEquals(VpnStatus.STARTING, VpnStateHolder.vpnStatus.value)
+        assertFalse(VpnStateHolder.isVpnRunning.value)
+
+        // Running protected
+        VpnStateHolder.setVpnEstablished(true)
+        VpnStateHolder.setStatus(VpnStatus.PROTECTED)
+        assertEquals(VpnStatus.PROTECTED, VpnStateHolder.vpnStatus.value)
+        assertTrue(VpnStateHolder.isVpnRunning.value)
+        assertTrue(VpnStateHolder.isVpnEstablished.value)
+
+        // Temporary network loss
+        VpnStateHolder.setStatus(VpnStatus.NETWORK_UNAVAILABLE, "No active internet connection")
+        assertEquals(VpnStatus.NETWORK_UNAVAILABLE, VpnStateHolder.vpnStatus.value)
+        assertFalse(VpnStateHolder.isVpnRunning.value)
+        assertTrue("Interface remains established during transient network loss", VpnStateHolder.isVpnEstablished.value)
+        assertEquals("No active internet connection", VpnStateHolder.lastError.value)
+
+        // Network recovery
+        VpnStateHolder.setStatus(VpnStatus.PROTECTED)
+        assertEquals(VpnStatus.PROTECTED, VpnStateHolder.vpnStatus.value)
+        assertTrue(VpnStateHolder.isVpnRunning.value)
+
+        // Teardown / Stopped
+        VpnStateHolder.setStatus(VpnStatus.OFF)
+        assertEquals(VpnStatus.OFF, VpnStateHolder.vpnStatus.value)
+        assertFalse(VpnStateHolder.isVpnRunning.value)
+        assertFalse(VpnStateHolder.isVpnEstablished.value)
+    }
 }
