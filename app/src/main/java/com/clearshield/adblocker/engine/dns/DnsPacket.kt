@@ -203,7 +203,7 @@ class DnsPacket(
             }
 
             val domain = sb.toString().trim().lowercase()
-            return if (domain.isNotEmpty()) domain else null
+            return if (domain.isNotEmpty()) domain else if (!jumped && hops == 0) "." else null
         }
 
         /**
