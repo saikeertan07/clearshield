@@ -479,36 +479,62 @@ class ClearShieldVpnService : VpnService() {
     }
 
     private fun registerNetworkCallback() {
+        unregisterNetworkCallback()
         val request = NetworkRequest.Builder()
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             .build()
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 Log.d(TAG, "Network available: $network")
-                upstreamResolver?.onNetworkChanged()
-                if (isRunning) {
-                    VpnStateHolder.setStatus(VpnStatus.PROTECTED)
-                    checkAndNotifyPrivateDns()
+                try {
+                    upstreamResolver?.onNetworkChanged()
+                    if (isRunning) {
+                        VpnStateHolder.setStatus(VpnStatus.PROTECTED)
+                        checkAndNotifyPrivateDns()
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error handling network available", e)
                 }
             }
+
+            override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
+                try {
+                    val hasInternet = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    val isValidated = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                    if (hasInternet && isValidated) {
+                        upstreamResolver?.onNetworkChanged()
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error handling network capabilities change", e)
+                }
+            }
+
             override fun onLost(network: Network) {
                 Log.d(TAG, "Network lost: $network")
-                upstreamResolver?.onNetworkChanged()
-                if (isRunning) {
-                    VpnStateHolder.setStatus(VpnStatus.NETWORK_UNAVAILABLE, "No active internet connection")
+                try {
+                    upstreamResolver?.onNetworkChanged()
+                    if (isRunning) {
+                        VpnStateHolder.setStatus(VpnStatus.NETWORK_UNAVAILABLE, "No active internet connection")
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error handling network lost", e)
                 }
             }
         }
-        connectivityManager?.registerNetworkCallback(request, networkCallback!!)
+        try {
+            connectivityManager?.registerNetworkCallback(request, networkCallback!!)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to register network callback: ${e.message}")
+        }
     }
 
     private fun unregisterNetworkCallback() {
-        networkCallback?.let {
-            try {
-                connectivityManager?.unregisterNetworkCallback(it)
-            } catch (e: Exception) {
-                Log.w(TAG, "Error unregistering network callback: ${e.message}")
-            }
+        val callback = networkCallback ?: return
+        networkCallback = null
+        try {
+            connectivityManager?.unregisterNetworkCallback(callback)
+        } catch (e: Exception) {
+            Log.w(TAG, "Error unregistering network callback: ${e.message}")
         }
     }
 }
