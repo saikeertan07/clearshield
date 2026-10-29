@@ -342,4 +342,28 @@ class DnsPacketTest {
         assertEquals(1, parsed!!.header.anCount)
         assertEquals(1, parsed.header.arCount)
     }
+
+    @Test
+    fun testRootZoneQueryParsing() {
+        val buf = ByteBuffer.allocate(32).order(ByteOrder.BIG_ENDIAN)
+        buf.putShort(0x5678.toShort())
+        buf.putShort(0x0100.toShort())
+        buf.putShort(1.toShort())
+        buf.putShort(0.toShort())
+        buf.putShort(0.toShort())
+        buf.putShort(0.toShort())
+
+        buf.put(0.toByte())
+        buf.putShort(DnsPacket.TYPE_NS.toShort())
+        buf.putShort(1.toShort())
+
+        val raw = ByteArray(buf.position())
+        System.arraycopy(buf.array(), 0, raw, 0, raw.size)
+
+        val parsed = DnsPacket.parse(raw)
+        assertNotNull("Root zone query must parse successfully", parsed)
+        assertEquals(1, parsed!!.questions.size)
+        assertEquals(".", parsed.questions[0].qName)
+        assertEquals(DnsPacket.TYPE_NS, parsed.questions[0].qType)
+    }
 }
